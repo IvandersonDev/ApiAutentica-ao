@@ -1,5 +1,7 @@
 # MS-Authentication com Rate Limiting
 
+## Sistema de Autenticação com Proteção contra Ataques de Força Bruta
+
 ## Funcionalidades Implementadas
 
 ### Rate Limiting
