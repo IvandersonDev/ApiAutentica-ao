@@ -1,1 +1,13 @@
+com\example\msauthentication\model\LoginAttempt.class
+com\example\msauthentication\dto\SimpleMessageResponse.class
+com\example\msauthentication\service\AuthService.class
+com\example\msauthentication\dto\LoginRequest.class
+com\example\msauthentication\dto\SignupResponse.class
+com\example\msauthentication\controller\AuthController.class
+com\example\msauthentication\model\User.class
+com\example\msauthentication\config\RateLimitConfig.class
 com\example\msauthentication\MsAuthenticationApplication.class
+com\example\msauthentication\helper\AuthHelper.class
+com\example\msauthentication\service\RateLimitService.class
+com\example\msauthentication\dto\SignupRequest.class
+com\example\msauthentication\model\Token.class
