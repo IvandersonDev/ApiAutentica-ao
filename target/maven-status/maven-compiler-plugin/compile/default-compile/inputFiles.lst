@@ -11,3 +11,4 @@ C:\Users\Usuario\Documents\Projetos Pessoais\msAuthentication\src\main\java\com\
 C:\Users\Usuario\Documents\Projetos Pessoais\msAuthentication\src\main\java\com\example\msauthentication\service\RateLimitService.java
 C:\Users\Usuario\Documents\Projetos Pessoais\msAuthentication\src\main\java\com\example\msauthentication\dto\SignupResponse.java
 C:\Users\Usuario\Documents\Projetos Pessoais\msAuthentication\src\main\java\com\example\msauthentication\controller\AuthController.java
+C:\Users\Usuario\Documents\Projetos Pessoais\msAuthentication\src\main\java\com\example\msauthentication\service\ThrottlingService.java
