@@ -4,6 +4,7 @@ import com.example.msauthentication.helper.AuthHelper;
 import com.example.msauthentication.model.User;
 import com.example.msauthentication.service.RateLimitService;
 import com.example.msauthentication.service.ThrottlingService;
+import com.example.msauthentication.service.TokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,9 @@ public class AuthController {
     
     @Autowired
     private ThrottlingService throttlingService;
+    
+    @Autowired
+    private TokenService tokenService;
 
     @PostMapping("/signup")
     public String signup(@RequestBody Map<String, String> body) {
@@ -69,35 +73,47 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public String login(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
         String email = body.get("email");
         String password = body.get("password");
         
         if (!AuthHelper.validEmail(email)) {
-            return "email ruim";
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Email invalido"));
         }
         
         if (rateLimitService.isUserBlocked(email)) {
             long remainingMinutes = rateLimitService.getRemainingBlockTimeMinutes(email);
-            return "bloqueado por " + remainingMinutes + " minutos";
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("message", "Conta bloqueada por " + remainingMinutes + " minutos"));
         }
         
         User found = findByEmail(email);
         if (found == null) {
-            return "nao existe";
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Credenciais invalidas"));
         }
         
         if (password != null && password.equals(found.password)) {
             rateLimitService.resetAttempts(email);
             found.loggedIn = true;
             found.updatedAt = Instant.now().toString();
-            return "logou";
+            
+            String token = tokenService.generateToken(email);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "Login realizado com sucesso",
+                "token", token,
+                "userId", found.id
+            ));
         } else {
             boolean isNowBlocked = rateLimitService.recordFailedAttempt(email);
             if (isNowBlocked) {
-                return "bloqueado por 10 minutos após 3 tentativas";
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("message", "Muitas tentativas. Bloqueado por 10 minutos"));
             }
-            return "errou";
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Credenciais invalidas"));
         }
     }
 
@@ -120,15 +136,28 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser(@RequestHeader("Authorization") String email) {
-        if (!throttlingService.isAllowed(email)) {
+    public ResponseEntity<?> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader == null || authHeader.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Token nao fornecido"));
+        }
+        
+        String token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader;
+        
+        if (!throttlingService.isAllowed(token)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(Map.of("message", "Muitas requisicoes. Aguarde 1 minuto"));
         }
         
-        if (email == null || email.trim().isEmpty()) {
+        if (!tokenService.validateToken(token)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("message", "Email nao fornecido"));
+                .body(Map.of("message", "Token invalido ou expirado"));
+        }
+        
+        String email = tokenService.extractEmail(token);
+        if (email == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Token invalido"));
         }
         
         User user = findByEmail(email);
