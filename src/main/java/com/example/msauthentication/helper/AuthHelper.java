@@ -13,8 +13,8 @@ public class AuthHelper {
         return password != null && password.length() >= 3;
     }
 
-    public static boolean validDocument(String doc) {
-        return doc != null && doc.length() >= 5;
+    public static boolean validName(String name) {
+        return name != null && name.trim().length() >= 2;
     }
 
     public static String makeToken(String email, String doc) {

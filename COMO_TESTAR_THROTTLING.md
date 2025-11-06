@@ -15,14 +15,24 @@ Throttling limita quantas requisicoes um usuario pode fazer em um periodo de tem
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/signup ^
   -H "Content-Type: application/json" ^
-  -d "{\"email\":\"teste@exemplo.com\",\"password\":\"Senha123!\",\"doc_number\":\"12345678901\",\"username\":\"teste\",\"full_name\":\"Usuario Teste\"}"
+  -d "{\"name\":\"Usuario Teste\",\"email\":\"teste@exemplo.com\",\"password\":\"Senha123!\"}"
 ```
 
-### 2. Acessar o Endpoint /me (10 vezes)
+### 2. Fazer login e obter o token
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"teste@exemplo.com\",\"password\":\"Senha123!\"}"
+```
+
+Guarde o valor retornado em `"token"`.
+
+### 3. Acessar o Endpoint /me (10 vezes)
 
 ```bash
 curl -X GET http://localhost:8080/api/v1/auth/me ^
-  -H "Authorization: teste@exemplo.com"
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
 ```
 
 **Resposta esperada (primeiras 10 vezes):**
@@ -30,20 +40,20 @@ curl -X GET http://localhost:8080/api/v1/auth/me ^
 {
   "id": 1,
   "email": "teste@exemplo.com",
-  "username": "teste",
+  "username": "Usuario Teste",
   "fullName": "Usuario Teste",
-  "docNumber": "12345678901",
+  "docNumber": "",
   "createdAt": "2025-10-30T..."
 }
 ```
 
-### 3. Testar o Bloqueio (11a requisicao)
+### 4. Testar o Bloqueio (11a requisicao)
 
 Execute pela 11a vez:
 
 ```bash
 curl -X GET http://localhost:8080/api/v1/auth/me ^
-  -H "Authorization: teste@exemplo.com"
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
 ```
 
 **Resposta esperada:**
@@ -53,7 +63,7 @@ curl -X GET http://localhost:8080/api/v1/auth/me ^
 }
 ```
 
-### 4. Aguardar 1 Minuto
+### 5. Aguardar 1 Minuto
 
 Aguarde 60 segundos e tente novamente. Vai funcionar!
 
@@ -61,13 +71,18 @@ Aguarde 60 segundos e tente novamente. Vai funcionar!
 
 ```powershell
 # Criar usuario
-$body = @{email="teste@exemplo.com";password="Senha123!";doc_number="12345678901";username="teste";full_name="Usuario Teste"} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/signup" -Method POST -Body $body -ContentType "application/json"
+$signupBody = @{name="Usuario Teste";email="teste@exemplo.com";password="Senha123!"} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/signup" -Method POST -Body $signupBody -ContentType "application/json"
+
+# Login
+$loginBody = @{email="teste@exemplo.com";password="Senha123!"} | ConvertTo-Json
+$loginResponse = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/login" -Method POST -Body $loginBody -ContentType "application/json"
+$token = $loginResponse.token
 
 # Testar /me 15 vezes
 for ($i = 1; $i -le 15; $i++) {
     try {
-        $response = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/me" -Method GET -Headers @{Authorization="teste@exemplo.com"}
+        $response = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/me" -Method GET -Headers @{Authorization="Bearer $token"}
         Write-Host "Requisicao ${i}: OK - $($response.email)" -ForegroundColor Green
     } catch {
         Write-Host "Requisicao ${i}: BLOQUEADA" -ForegroundColor Red

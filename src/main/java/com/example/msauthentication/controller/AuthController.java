@@ -46,30 +46,28 @@ public class AuthController {
     public String signup(@RequestBody Map<String, String> body) {
         String email = body.get("email");
         String password = body.get("password");
-        String doc = body.get("doc_number");
-        String username = body.get("username");
-        String fullName = body.get("full_name");
+        String name = body.getOrDefault("name", body.get("full_name"));
         if (!AuthHelper.validEmail(email)) {
             return "email ruim";
-        }
-        if (!AuthHelper.validDocument(doc)) {
-            return "doc ruim";
         }
         if (!AuthHelper.validPassword(password)) {
             return "senha ruim";
         }
         for (User item : USERS) {
-            if (email.equalsIgnoreCase(item.email) || doc.equals(item.docNumber)) {
+            if (item.email != null && email.equalsIgnoreCase(item.email)) {
                 return "ja tem";
             }
+        }
+        if (!AuthHelper.validName(name)) {
+            return "nome ruim";
         }
         User user = new User();
         user.id = NEXT_ID++;
         user.email = email;
-        user.docNumber = doc;
+        user.docNumber = null;
         user.password = password;
-        user.username = username;
-        user.fullName = fullName;
+        user.username = name;
+        user.fullName = name;
         user.loggedIn = false;
         user.createdAt = Instant.now().toString();
         user.updatedAt = user.createdAt;
@@ -184,9 +182,9 @@ public class AuthController {
     @PostMapping("/password-recovery/request")
     public ResponseEntity<?> requestPasswordRecovery(@RequestBody Map<String, String> body) {
         String email = body.get("email");
-        String doc = body.get("doc_number");
+        String name = body.getOrDefault("name", body.get("full_name"));
 
-        if (!AuthHelper.validEmail(email) || !AuthHelper.validDocument(doc)) {
+        if (!AuthHelper.validEmail(email) || !AuthHelper.validName(name)) {
             return ResponseEntity.badRequest()
                 .body(Map.of("message", "Dados invalidos"));
         }
@@ -197,7 +195,7 @@ public class AuthController {
                 .body(Map.of("message", "Usuario nao encontrado"));
         }
 
-        if (user.docNumber == null || !secureEquals(user.docNumber, doc)) {
+        if (user.fullName == null || !secureEquals(user.fullName, name)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of("message", "Dados de validacao incorretos"));
         }

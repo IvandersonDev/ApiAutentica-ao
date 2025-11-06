@@ -42,13 +42,13 @@ password-recovery.hmac-secret=change-me-too-use-env
 ## Endpoints Principais
 
 ### Auth
-- `POST /api/v1/auth/signup` – Cadastro de usuario.
+- `POST /api/v1/auth/signup` – Cadastro de usuario (nome, email e senha).
 - `POST /api/v1/auth/login` – Login com rate limiting baseado em Redis. Retorna token simetricamente criptografado (AES/GCM).
 - `GET /api/v1/auth/me` – Recupera informacoes do usuario autenticado. Possui throttling (10 req/min) com Redis.
 - `GET /api/v1/auth/rate-limit-status?email=...` – Consulta status do bloqueio por tentativas incorretas.
 
 ### Recuperacao de Senha
-- `POST /api/v1/auth/password-recovery/request` – Valida email/documento e gera token de recuperacao temporario. Para fins de teste o token e retornado na resposta; em producao deve ser enviado por canal seguro.
+- `POST /api/v1/auth/password-recovery/request` – Valida email/nome e gera token de recuperacao temporario. Para fins de teste o token e retornado na resposta; em producao deve ser enviado por canal seguro.
 - `POST /api/v1/auth/password-recovery/validate` – Valida o token informado aplicando comparacao em tempo constante e limite de tentativas.
 - `POST /api/v1/auth/password-recovery/reset` – Atualiza a senha caso o token seja valido. Invalida o token e reseta contadores.
 
