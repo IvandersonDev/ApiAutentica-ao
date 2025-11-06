@@ -66,11 +66,6 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
    ```
 4. A API ficara disponivel em `http://localhost:8080`.
 
-## Colecao Postman
-- Importar `postman/ms-authentication.postman_collection.json`.
-- Ajustar variaveis (nome, email, senhas) conforme necessário.
-- Executar os requests na ordem do grupo **Auth** e, em seguida, **Password Recovery** para validar os fluxos.
-
 ## Observacoes de Seguranca
 - Os segredos presentes no `application.properties` sao valores placeholder e devem ser substituidos.
 - Configure as credenciais do PostgreSQL via variaveis de ambiente ou profiles separados para evitar expor senhas.
