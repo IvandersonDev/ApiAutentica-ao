@@ -24,8 +24,7 @@ public class AuthService {
 
     public User registerUser(String name, String email, String password) {
         User user = new User();
-        user.setFullName(name);
-        user.setUsername(name);
+        user.setName(name);
         user.setEmail(email);
         user.setPassword(password);
         user.setLoggedIn(false);

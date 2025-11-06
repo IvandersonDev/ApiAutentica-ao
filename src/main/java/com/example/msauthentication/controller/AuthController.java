@@ -167,9 +167,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
             "id", user.getId(),
             "email", user.getEmail(),
-            "username", user.getUsername(),
-            "fullName", user.getFullName(),
-            "docNumber", user.getDocNumber() != null ? user.getDocNumber() : "",
+            "name", user.getName(),
             "createdAt", createdAt != null ? createdAt.toString() : ""
         ));
     }
@@ -191,7 +189,7 @@ public class AuthController {
         }
 
         User user = optionalUser.get();
-        if (user.getFullName() == null || !secureEquals(user.getFullName(), name)) {
+        if (user.getName() == null || !secureEquals(user.getName(), name)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of("message", "Dados de validacao incorretos"));
         }

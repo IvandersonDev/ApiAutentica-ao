@@ -40,9 +40,7 @@ curl -X GET http://localhost:8080/api/v1/auth/me ^
 {
   "id": 1,
   "email": "teste@exemplo.com",
-  "username": "Usuario Teste",
-  "fullName": "Usuario Teste",
-  "docNumber": "",
+  "name": "Usuario Teste",
   "createdAt": "2025-10-30T..."
 }
 ```
