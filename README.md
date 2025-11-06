@@ -6,12 +6,19 @@ Aplicacao Spring Boot que simula um microsservico de autenticacao com controles 
 ## Dependencias Principais
 - Java 17
 - Maven
+- PostgreSQL (localhost:5432 por padrao)
 - Redis (localhost:6379 por padrao)
 
 ## Configuracao
 As configuracoes padrao podem ser ajustadas no arquivo `src/main/resources/application.properties`:
 
 ```properties
+# Banco de dados
+spring.datasource.url=jdbc:postgresql://localhost:5432/ms_auth
+spring.datasource.username=postgres
+spring.datasource.password=postgres
+spring.sql.init.mode=never
+
 # Rate limiting
 rate-limit.enabled=true
 rate-limit.max-attempts=3
@@ -46,15 +53,17 @@ password-recovery.hmac-secret=change-me-too-use-env
 - `POST /api/v1/auth/password-recovery/reset` – Atualiza a senha caso o token seja valido. Invalida o token e reseta contadores.
 
 ## Executando
-1. Inicie um servidor Redis local (`redis-server`).
-2. Execute a aplicacao:
+1. Inicie um servidor PostgreSQL local e garanta que o banco exista (exemplo: `CREATE DATABASE ms_auth;`).
+2. Inicie um servidor Redis local (`redis-server`).
+3. Execute a aplicacao:
    ```bash
    mvn spring-boot:run
    ```
-3. A API ficara disponivel em `http://localhost:8080`.
+4. A API ficara disponivel em `http://localhost:8080`.
 
 ## Observacoes de Seguranca
 - Os segredos presentes no `application.properties` sao valores placeholder e devem ser substituidos.
+- Configure as credenciais do PostgreSQL via variaveis de ambiente ou profiles separados para evitar expor senhas.
 - A criptografia usa AES-256 em modo GCM com IV aleatorio por token.
 - Token de recuperacao e armazenado com hash HMAC e validado com comparacao em tempo constante.
 - Tentativas invalidas de recuperar senha sao limitadas (redis + TTL) para mitigar brute force.
