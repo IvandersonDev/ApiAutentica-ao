@@ -1,95 +1,60 @@
-# MS-Authentication com Rate Limiting
+# MS-Authentication com Protecoes Adicionais
 
-## Sistema de Autenticação com Proteção contra Ataques de Força Bruta
+## Visao Geral
+Aplicacao Spring Boot que simula um microsservico de autenticacao com controles anti-abuso, criptografia simetrica de tokens e fluxo seguro de recuperacao de senha. Redis e utilizado como armazenamento de cache para rate limiting, throttling e tokens de recuperacao (com fallback em memoria para ambientes de desenvolvimento).
 
-## Funcionalidades Implementadas
+## Dependencias Principais
+- Java 17
+- Maven
+- Redis (localhost:6379 por padrao)
 
-### Rate Limiting
-- **Bloqueio após 3 tentativas**: Após 3 tentativas de login falhadas, o usuário é bloqueado por 10 minutos
-- **Configurável**: As configurações podem ser ajustadas no `application.properties`
-- **Endpoint de status**: Verificar o status de bloqueio de um usuário
-
-## Configurações
-
-No arquivo `application.properties`:
+## Configuracao
+As configuracoes padrao podem ser ajustadas no arquivo `src/main/resources/application.properties`:
 
 ```properties
-# Rate Limiting Configuration
+# Rate limiting
 rate-limit.enabled=true
 rate-limit.max-attempts=3
 rate-limit.block-duration-minutes=10
+
+# Redis
+spring.redis.host=localhost
+spring.redis.port=6379
+
+# Criptografia do token
+token.encryption.secret=change-me-please-use-env
+token.encryption.ttl-hours=24
+
+# Recuperacao de senha
+password-recovery.token-ttl-minutes=15
+password-recovery.hmac-secret=change-me-too-use-env
 ```
 
-## Endpoints Disponíveis
+> **Importante:** sobrescreva os segredos por variaveis de ambiente no ambiente real.
 
-### 1. Login
-```
-POST /api/v1/auth/login
-Content-Type: application/json
+## Endpoints Principais
 
-{
-  "email": "usuario@exemplo.com",
-  "password": "senha123"
-}
-```
+### Auth
+- `POST /api/v1/auth/signup` – Cadastro de usuario.
+- `POST /api/v1/auth/login` – Login com rate limiting baseado em Redis. Retorna token simetricamente criptografado (AES/GCM).
+- `GET /api/v1/auth/me` – Recupera informacoes do usuario autenticado. Possui throttling (10 req/min) com Redis.
+- `GET /api/v1/auth/rate-limit-status?email=...` – Consulta status do bloqueio por tentativas incorretas.
 
-**Respostas possíveis:**
-- `"logou"` - Login bem-sucedido
-- `"errou"` - Senha incorreta (incrementa tentativas)
-- `"nao existe"` - Usuário não encontrado
-- `"email ruim"` - Email inválido
-- `"bloqueado por X minutos"` - Usuário bloqueado por rate limiting
-- `"bloqueado por 10 minutos após 3 tentativas"` - Usuário acabou de ser bloqueado
+### Recuperacao de Senha
+- `POST /api/v1/auth/password-recovery/request` – Valida email/documento e gera token de recuperacao temporario. Para fins de teste o token e retornado na resposta; em producao deve ser enviado por canal seguro.
+- `POST /api/v1/auth/password-recovery/validate` – Valida o token informado aplicando comparacao em tempo constante e limite de tentativas.
+- `POST /api/v1/auth/password-recovery/reset` – Atualiza a senha caso o token seja valido. Invalida o token e reseta contadores.
 
-### 2. Cadastro
-```
-POST /api/v1/auth/signup
-Content-Type: application/json
+## Executando
+1. Inicie um servidor Redis local (`redis-server`).
+2. Execute a aplicacao:
+   ```bash
+   mvn spring-boot:run
+   ```
+3. A API ficara disponivel em `http://localhost:8080`.
 
-{
-  "email": "usuario@exemplo.com",
-  "password": "senha123",
-  "doc_number": "12345678901",
-  "username": "usuario",
-  "full_name": "Nome Completo"
-}
-```
-
-### 3. Status do Rate Limiting
-```
-GET /api/v1/auth/rate-limit-status?email=usuario@exemplo.com
-```
-
-**Resposta:**
-```json
-{
-  "email": "usuario@exemplo.com",
-  "isBlocked": true,
-  "remainingMinutes": 8
-}
-```
-
-## Como Funciona o Rate Limiting
-
-1. **Primeira tentativa falhada**: Incrementa contador
-2. **Segunda tentativa falhada**: Incrementa contador
-3. **Terceira tentativa falhada**: Usuário é bloqueado por 10 minutos
-4. **Login bem-sucedido**: Reseta o contador de tentativas
-5. **Após o bloqueio expirar**: Usuário pode tentar novamente
-
-## Executando a Aplicação
-
-```bash
-mvn spring-boot:run
-```
-
-A aplicação estará disponível em `http://localhost:8080`
-
-## Testando o Rate Limiting
-
-1. Faça 3 tentativas de login com senha incorreta
-2. Na 3ª tentativa, você receberá a mensagem de bloqueio
-3. Use o endpoint `/rate-limit-status` para verificar o tempo restante
-4. Após 10 minutos, o usuário será desbloqueado automaticamente
-5. Um login bem-sucedido reseta imediatamente o contador
-
+## Observacoes de Seguranca
+- Os segredos presentes no `application.properties` sao valores placeholder e devem ser substituidos.
+- A criptografia usa AES-256 em modo GCM com IV aleatorio por token.
+- Token de recuperacao e armazenado com hash HMAC e validado com comparacao em tempo constante.
+- Tentativas invalidas de recuperar senha sao limitadas (redis + TTL) para mitigar brute force.

@@ -2,6 +2,7 @@ package com.example.msauthentication.controller;
 
 import com.example.msauthentication.helper.AuthHelper;
 import com.example.msauthentication.model.User;
+import com.example.msauthentication.service.PasswordRecoveryService;
 import com.example.msauthentication.service.RateLimitService;
 import com.example.msauthentication.service.ThrottlingService;
 import com.example.msauthentication.service.TokenService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +38,9 @@ public class AuthController {
     
     @Autowired
     private TokenService tokenService;
+    
+    @Autowired
+    private PasswordRecoveryService passwordRecoveryService;
 
     @PostMapping("/signup")
     public String signup(@RequestBody Map<String, String> body) {
@@ -176,6 +181,91 @@ public class AuthController {
         ));
     }
 
+    @PostMapping("/password-recovery/request")
+    public ResponseEntity<?> requestPasswordRecovery(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String doc = body.get("doc_number");
+
+        if (!AuthHelper.validEmail(email) || !AuthHelper.validDocument(doc)) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Dados invalidos"));
+        }
+
+        User user = findByEmail(email);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("message", "Usuario nao encontrado"));
+        }
+
+        if (user.docNumber == null || !secureEquals(user.docNumber, doc)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Dados de validacao incorretos"));
+        }
+
+        String token = passwordRecoveryService.issueToken(email);
+
+        return ResponseEntity.ok(Map.of(
+            "message", "Token de recuperacao gerado. Utilize o token enviado para concluir o processo.",
+            "recoveryToken", token
+        ));
+    }
+
+    @PostMapping("/password-recovery/validate")
+    public ResponseEntity<?> validateRecoveryToken(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String token = body.get("token");
+
+        PasswordRecoveryService.PasswordValidationResult result = passwordRecoveryService.validateToken(email, token);
+
+        if (result.locked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("message", "Muitas tentativas invalidas. Aguarde alguns minutos."));
+        }
+
+        if (!result.valid()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Token invalido ou expirado"));
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Token valido"));
+    }
+
+    @PostMapping("/password-recovery/reset")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String token = body.get("token");
+        String newPassword = body.get("new_password");
+
+        if (!AuthHelper.validEmail(email) || !AuthHelper.validPassword(newPassword)) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Dados invalidos"));
+        }
+
+        User user = findByEmail(email);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("message", "Usuario nao encontrado"));
+        }
+
+        PasswordRecoveryService.PasswordValidationResult result = passwordRecoveryService.validateToken(email, token);
+        if (result.locked()) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("message", "Muitas tentativas invalidas. Aguarde alguns minutos."));
+        }
+
+        if (!result.valid()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Token invalido ou expirado"));
+        }
+
+        user.password = newPassword;
+        user.updatedAt = Instant.now().toString();
+        passwordRecoveryService.invalidateToken(email);
+        rateLimitService.resetAttempts(email);
+
+        return ResponseEntity.ok(Map.of("message", "Senha atualizada com sucesso"));
+    }
+
     private User findByEmail(String email) {
         for (User item : USERS) {
             if (item.email != null && item.email.equalsIgnoreCase(email)) {
@@ -183,6 +273,15 @@ public class AuthController {
             }
         }
         return null;
+    }
+
+    private boolean secureEquals(String value, String expected) {
+        if (value == null || expected == null) {
+            return false;
+        }
+        byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        return java.security.MessageDigest.isEqual(valueBytes, expectedBytes);
     }
 
 }
