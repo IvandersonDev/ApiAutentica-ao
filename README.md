@@ -35,6 +35,11 @@ token.encryption.ttl-hours=24
 # Recuperacao de senha
 password-recovery.token-ttl-minutes=15
 password-recovery.hmac-secret=change-me-too-use-env
+
+# JPA
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.open-in-view=false
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 ```
 
 > **Importante:** sobrescreva os segredos por variaveis de ambiente no ambiente real.
@@ -69,6 +74,7 @@ password-recovery.hmac-secret=change-me-too-use-env
 ## Observacoes de Seguranca
 - Os segredos presentes no `application.properties` sao valores placeholder e devem ser substituidos.
 - Configure as credenciais do PostgreSQL via variaveis de ambiente ou profiles separados para evitar expor senhas.
+- O schema e gerenciado automaticamente via `spring.jpa.hibernate.ddl-auto=update` (ajuste conforme o ambiente).
 - A criptografia usa AES-256 em modo GCM com IV aleatorio por token.
 - Token de recuperacao e armazenado com hash HMAC e validado com comparacao em tempo constante.
 - Tentativas invalidas de recuperar senha sao limitadas (redis + TTL) para mitigar brute force.
