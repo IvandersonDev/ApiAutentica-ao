@@ -1,95 +1,127 @@
 package com.example.msauthentication.service;
 
+import com.example.msauthentication.config.TokenEncryptionProperties;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 
 @Service
 public class TokenService {
-    
-    private static final String ALGORITHM = "AES";
-    private static final String SECRET_KEY = "MySecretKey12345";
+
+    private static final String CIPHER_ALGORITHM = "AES/GCM/NoPadding";
+    private static final String KEY_ALGORITHM = "AES";
+    private static final int GCM_TAG_LENGTH_BITS = 128;
+    private static final int IV_LENGTH_BYTES = 12;
+
+    private final SecureRandom secureRandom = new SecureRandom();
     private final SecretKey secretKey;
-    
-    public TokenService() {
-        byte[] keyBytes = new byte[16];
-        byte[] secretBytes = SECRET_KEY.getBytes(StandardCharsets.UTF_8);
-        System.arraycopy(secretBytes, 0, keyBytes, 0, Math.min(secretBytes.length, keyBytes.length));
-        this.secretKey = new SecretKeySpec(keyBytes, ALGORITHM);
+    private final long ttlMillis;
+
+    public TokenService(TokenEncryptionProperties properties) {
+        this.secretKey = buildSecretKey(properties);
+        this.ttlMillis = properties.getTtlDuration().toMillis();
     }
-    
+
     public String generateToken(String email) {
-        String rawToken = UUID.randomUUID().toString() + ":" + email + ":" + Instant.now().toEpochMilli();
-        return encrypt(rawToken);
-    }
-    
-    public String decryptToken(String encryptedToken) {
-        try {
-            return decrypt(encryptedToken);
-        } catch (Exception e) {
-            return null;
+        if (!StringUtils.hasText(email)) {
+            throw new IllegalArgumentException("Email must be provided to generate a token");
         }
+
+        long expiresAt = Instant.now().plusMillis(ttlMillis).toEpochMilli();
+        String payload = email.trim().toLowerCase() + ":" + expiresAt + ":" + UUID.randomUUID();
+        return encrypt(payload);
     }
-    
+
     public boolean validateToken(String encryptedToken) {
-        String decrypted = decryptToken(encryptedToken);
-        if (decrypted == null) {
+        TokenPayload payload = decryptTokenInternal(encryptedToken);
+        if (payload == null) {
             return false;
         }
-        
-        String[] parts = decrypted.split(":");
-        if (parts.length != 3) {
-            return false;
-        }
-        
-        try {
-            long timestamp = Long.parseLong(parts[2]);
-            long now = Instant.now().toEpochMilli();
-            long hourInMillis = 60 * 60 * 1000;
-            
-            return (now - timestamp) < (24 * hourInMillis);
-        } catch (Exception e) {
-            return false;
-        }
+
+        return payload.expiresAt > Instant.now().toEpochMilli();
     }
-    
+
     public String extractEmail(String encryptedToken) {
-        String decrypted = decryptToken(encryptedToken);
-        if (decrypted == null) {
+        TokenPayload payload = decryptTokenInternal(encryptedToken);
+        return payload != null ? payload.email : null;
+    }
+
+    private TokenPayload decryptTokenInternal(String encryptedToken) {
+        if (!StringUtils.hasText(encryptedToken)) {
             return null;
         }
-        
-        String[] parts = decrypted.split(":");
-        return parts.length >= 2 ? parts[1] : null;
+
+        try {
+            String decrypted = decrypt(encryptedToken);
+            String[] parts = decrypted.split(":");
+            if (parts.length != 3) {
+                return null;
+            }
+            String email = parts[0];
+            long expiresAt = Long.parseLong(parts[1]);
+            return new TokenPayload(email, expiresAt);
+        } catch (Exception e) {
+            return null;
+        }
     }
-    
+
     private String encrypt(String data) {
         try {
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-            byte[] encryptedBytes = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(encryptedBytes);
+            byte[] iv = new byte[IV_LENGTH_BYTES];
+            secureRandom.nextBytes(iv);
+
+            Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
+
+            byte[] ciphertext = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
+
+            ByteBuffer buffer = ByteBuffer.allocate(iv.length + ciphertext.length);
+            buffer.put(iv);
+            buffer.put(ciphertext);
+
+            return Base64.getEncoder().encodeToString(buffer.array());
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao criptografar: " + e.getMessage());
+            throw new IllegalStateException("Erro ao criptografar token: " + e.getMessage(), e);
         }
     }
-    
+
     private String decrypt(String encryptedData) {
         try {
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, secretKey);
-            byte[] decodedBytes = Base64.getDecoder().decode(encryptedData);
-            byte[] decryptedBytes = cipher.doFinal(decodedBytes);
-            return new String(decryptedBytes, StandardCharsets.UTF_8);
+            byte[] decoded = Base64.getDecoder().decode(encryptedData);
+
+            byte[] iv = new byte[IV_LENGTH_BYTES];
+            byte[] ciphertext = new byte[decoded.length - IV_LENGTH_BYTES];
+
+            ByteBuffer buffer = ByteBuffer.wrap(decoded);
+            buffer.get(iv);
+            buffer.get(ciphertext);
+
+            Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
+
+            byte[] decrypted = cipher.doFinal(ciphertext);
+            return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao descriptografar: " + e.getMessage());
+            throw new IllegalStateException("Erro ao descriptografar token: " + e.getMessage(), e);
         }
+    }
+
+    private SecretKey buildSecretKey(TokenEncryptionProperties properties) {
+        byte[] keyBytes = properties.getSecretKeyBytes();
+        return new SecretKeySpec(keyBytes, KEY_ALGORITHM);
+    }
+
+    private record TokenPayload(String email, long expiresAt) {
     }
 }
 
